@@ -18,7 +18,7 @@ function useUser() {
     firebase.auth().signInAnonymously().then(({ user }) => {
       setUser(user)
     })
-  }, [])
+  }, [user])
 
   return user
 }
@@ -39,11 +39,14 @@ function useTable(user, w, h) {
 }
 
 function Paper({ w, h, disabled }) {
-  console.log(`Paper render!`)
+  console.warn(`Paper render! w=${w} h=${h} disabled=${!!disabled}`)
 
   const user = useUser()
   const table = useTable(user, w, h)
+  const [ buf, setBuf ] = useState()
 
+  console.log(`buf ${JSON.stringify(buf)}`)
+  
   return (
     <table>
       <tbody>
@@ -52,15 +55,26 @@ function Paper({ w, h, disabled }) {
             <tr key={y}>
               {
                 r.map((c, x) =>
-                  <td key={x}>
+                  <td
+                    key={x}
+                    
+                    onBlur={() => {
+                      if (disabled || !buf) return
+
+                      table[y][x] = buf[y][x]
+                      firebase.firestore().collection('paper').doc(user.uid).set(Object.assign({}, table))
+                      setBuf()
+                    }}
+                  >
                     {
                       disabled ? c : (
                         <ContentEditable
-                          html={c}
+                          html={((buf || {})[y] || {})[x] || c}
+
                           onChange={e => {
-                            console.log(`user.uid ${!!user.uid}`)
-                            table[y][x] = e.target.value
-                            firebase.firestore().collection('paper').doc(user.uid).set(Object.assign({}, table))
+                            let b = buf || {[y]: {}}
+                            b[y][x] = e.target.value
+                            setBuf(b)
                           }}
                         />
                       )
