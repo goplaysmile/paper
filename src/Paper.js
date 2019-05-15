@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import ContentEditable from 'react-contenteditable'
 import firebase from 'firebase/app'
 import 'firebase/auth'
 import 'firebase/firestore'
@@ -12,38 +13,53 @@ function useUser() {
   const [ user, setUser ] = useState(firebase.auth().currentUser)
   
   if (!user) {
-    firebase.auth().signInAnonymously().then(setUser)
+    console.warn('signing in...')
+    firebase.auth().signInAnonymously().then(({ user }) => {
+      console.warn(`SIGNED IN! user.uid ${!!user.uid}`)
+      setUser(user)
+    })
   }
 
   return user
 }
 
-function useTable(user) {
-  const [ table, setTable ] = useState()
+function useTable(user, w, h) {
+  const [ table, setTable ] = useState(
+    [...Array(h).keys()].map(() => [...Array(w).keys()].map(() => ''))
+  )
 
-  if (!user || !user.uid) return
+  if (!user || !user.uid) return table
   
   firebase.firestore().collection('paper').doc(user.uid).get()
-    .then(d => setTable(d.data()))
+    .then(d => setTable(Object.values(d.data())))
 
   return table
 }
 
 function Paper({ w, h }) {
-  const user = useUser()
-  const table = useTable(user)
+  console.log(`Paper render!`)
 
-  console.log(JSON.stringify(table, null, 2))
+  const user = useUser()
+  const table = useTable(user, w, h)
 
   return (
     <table>
       <tbody>
         {
-          (table || [...Array(h).keys()].map(() => undefined) ).map((r, y) =>
+          table.map((r, y) =>
             <tr key={y}>
               {
-                (r || [...Array(w).keys()].map(() => undefined)).map((c, x) =>
-                  <td key={x} contentEditable>{c}</td>
+                r.map((c, x) =>
+                  <td key={x}>
+                    <ContentEditable
+                      html={c}
+                      onChange={e => {
+                        console.log(`user.uid ${!!user.uid}`)
+                        table[y][x] = e.target.value
+                        firebase.firestore().collection('paper').doc(user.uid).set(Object.assign({}, table))
+                      }}
+                    />
+                  </td>
                 )
               }
             </tr>
