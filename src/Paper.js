@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import ContentEditable from 'react-contenteditable'
 import firebase from 'firebase/app'
 import 'firebase/auth'
@@ -12,31 +12,33 @@ if (!firebase.apps.length) {
 function useUser() {
   const [ user, setUser ] = useState(firebase.auth().currentUser)
   
-  if (!user) {
-    console.warn('signing in...')
+  useEffect(() => {
+    if (user) return
+
     firebase.auth().signInAnonymously().then(({ user }) => {
-      console.warn(`SIGNED IN! user.uid ${!!user.uid}`)
       setUser(user)
     })
-  }
+  }, [])
 
   return user
 }
 
 function useTable(user, w, h) {
-  const [ table, setTable ] = useState(
-    [...Array(h).keys()].map(() => [...Array(w).keys()].map(() => ''))
-  )
+  const [ table, setTable ] = useState()
 
-  if (!user || !user.uid) return table
-  
-  firebase.firestore().collection('paper').doc(user.uid).get()
-    .then(d => setTable(Object.values(d.data())))
+  useEffect(() => {
+    if (!user || !user.uid) return
 
-  return table
+    firebase.firestore().collection('paper').doc(user.uid).onSnapshot(snap => {
+      console.log(`arrived\n${JSON.stringify(snap.data())}`)
+      setTable(snap.data() ? Object.values(snap.data()) : undefined)
+    })
+  }, [user])
+    
+  return table || [...Array(h).keys()].map(() => [...Array(w).keys()].map(() => ''))
 }
 
-function Paper({ w, h }) {
+function Paper({ w, h, disabled }) {
   console.log(`Paper render!`)
 
   const user = useUser()
@@ -51,14 +53,18 @@ function Paper({ w, h }) {
               {
                 r.map((c, x) =>
                   <td key={x}>
-                    <ContentEditable
-                      html={c}
-                      onChange={e => {
-                        console.log(`user.uid ${!!user.uid}`)
-                        table[y][x] = e.target.value
-                        firebase.firestore().collection('paper').doc(user.uid).set(Object.assign({}, table))
-                      }}
-                    />
+                    {
+                      disabled ? c : (
+                        <ContentEditable
+                          html={c}
+                          onChange={e => {
+                            console.log(`user.uid ${!!user.uid}`)
+                            table[y][x] = e.target.value
+                            firebase.firestore().collection('paper').doc(user.uid).set(Object.assign({}, table))
+                          }}
+                        />
+                      )
+                    }
                   </td>
                 )
               }
